@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="LosAntos work">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<title>LosAntos work</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{color-scheme:dark}
+body{margin:0;font-family:system-ui,Roboto,Arial,sans-serif;background:#0f172a;color:#e5e7eb}
+#app{max-width:560px;margin:0 auto;padding:12px 12px 90px}
+.brand{text-align:center;font-size:12px;letter-spacing:.12em;color:#4ade80;text-transform:uppercase;margin:4px 0}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0 10px}
+h1{font-size:22px;margin:0;text-align:center;flex:1}
+h1.small{font-size:16px}
+.nav{width:44px;height:44px;border:0;border-radius:12px;background:#1e293b;color:#fff;font-size:26px}
+.nav.ph{background:none}
+.sum{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:6px}
+.sum div{background:#1e293b;border-radius:12px;padding:8px;display:flex;flex-direction:column;gap:2px}
+.sum span{font-size:11px;color:#94a3b8}
+.sum b{font-size:14px}
+.ok{color:#4ade80}
+.cap{font-size:12px;color:#94a3b8;margin:0 0 12px;text-align:center}
+.dow,.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.dow div{text-align:center;font-size:12px;color:#94a3b8;padding:4px 0}
+.cell{aspect-ratio:1/1.05;border-radius:10px;border:0;background:#1e293b;color:#e5e7eb;font-size:16px;position:relative;display:flex;align-items:center;justify-content:center}
+.cell.empty{background:none}
+.cell.today{outline:2px solid #facc15}
+.cell.has{background:#14532d}
+.cell i{position:absolute;top:3px;right:5px;font-style:normal;font-size:11px;color:#facc15}
+.bar{position:fixed;left:0;right:0;bottom:0;display:flex;gap:8px;padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:#0f172a;border-top:1px solid #1e293b;max-width:560px;margin:0 auto}
+.btn{flex:1;height:48px;border:0;border-radius:12px;background:#16a34a;color:#fff;font-size:16px;font-weight:600}
+.btn.sec{background:#334155}
+.btn.del{background:#b91c1c}
+.card{background:#1e293b;border-radius:14px;padding:12px;margin-bottom:10px;display:flex;flex-direction:column;gap:4px}
+.row{display:flex;justify-content:space-between;gap:8px}
+.price{color:#4ade80}
+.svc{font-size:16px}
+.muted{color:#94a3b8}
+.small{font-size:13px}
+a{color:#60a5fa}
+.form label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:#94a3b8;margin:10px 0}
+.form input{height:46px;border-radius:10px;border:1px solid #334155;background:#1e293b;color:#fff;font-size:16px;padding:0 10px;width:100%}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mh{font-size:13px;color:#94a3b8;margin:14px 0 6px}
+.mrow{display:grid;grid-template-columns:1fr 100px 44px;gap:6px;margin-bottom:6px}
+.mrow input{margin:0}
+.x{border:0;border-radius:10px;background:#334155;color:#fff}
+.mats .btn{width:100%;height:42px}
+.calc{background:#1e293b;border-radius:12px;padding:12px;margin:14px 0;line-height:1.7}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{color:#94a3b8;text-align:left;font-weight:500;padding:6px 4px}
+td{padding:9px 4px;border-top:1px solid #1e293b}
+.tools{display:flex;gap:8px;margin:16px 0}
+.tools .btn{height:44px;font-size:14px}
+.note{font-size:12px;color:#94a3b8;line-height:1.5}
+.login{margin-top:40px}
+.login .btn{width:100%;margin-top:6px}
+.err{color:#f87171;font-size:13px;min-height:18px;margin:6px 0}
+</style>
+<script src="firebase-config.js"></script>
+</head>
+<body>
+<div id="app"></div>
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import {initializeFirestore,persistentLocalCache,collection,doc,setDoc,deleteDoc,onSnapshot,writeBatch} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+var app=document.getElementById('app');
+var cfg=window.FIREBASE_CONFIG||{};
+if(!cfg.apiKey||String(cfg.apiKey).indexOf('ВСТАВЬ')===0){
+  app.innerHTML='<p class="muted" style="margin-top:60px;text-align:center">Заполни файл firebase-config.js</p>';
+  throw new Error('no firebase config');
+}
+
+var LN=null;
+try{
+  if(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform()){
+    LN=window.Capacitor.Plugins.LocalNotifications||null;
+  }
+}catch(e){LN=null;}
+var REMIND_MIN=60;
+
+var fbApp=initializeApp(cfg);
+var auth=getAuth(fbApp);
+var db=initializeFirestore(fbApp,{localCache:persistentLocalCache()});
+var col=collection(db,'entries');
+
+var MONTHS=['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+var MONTHS_GEN=['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+var DOW=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+var DOWFULL=['Воскресенье','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота'];
+
+var entries=[];
+var draft=null;
+var user=null;
+var ready=false;
+var unsub=null;
+var now=new Date();
+var view={name:'cal',year:now.getFullYear(),month:now.getMonth(),date:null,id:null};
+
+function pad(n){return String(n).padStart(2,'0');}
+function ymd(y,m,d){return y+'-'+pad(m+1)+'-'+pad(d);}
+function todayStr(){var t=new Date();return ymd(t.getFullYear(),t.getMonth(),t.getDate());}
+function num(v){var n=parseFloat(String(v).replace(',','.'));return isNaN(n)?0:n;}
+function money(n){return (Math.round(n*100)/100).toLocaleString('ru-RU')+' ₽';}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function matSum(e){return (e.materials||[]).reduce(function(s,m){return s+num(m.cost);},0);}
+function totals(list){var rev=0,exp=0;list.forEach(function(e){rev+=num(e.price);exp+=matSum(e);});return {rev:rev,exp:exp,profit:rev-exp,count:list.length};}
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
+function dateTitle(s){var p=s.split('-').map(Number);var dt=new Date(p[0],p[1]-1,p[2]);return p[2]+' '+MONTHS_GEN[p[1]-1]+' '+p[0]+', '+DOWFULL[dt.getDay()];}
+function sumBox(t,cap){return '<div class="sum"><div><span>Выручка</span><b>'+money(t.rev)+'</b></div><div><span>Расходы</span><b>'+money(t.exp)+'</b></div><div><span>Прибыль</span><b class="ok">'+money(t.profit)+'</b></div></div><p class="cap">'+cap+'</p>';}
+
+/* ---------- облако ---------- */
+function persist(e){setDoc(doc(db,'entries',e.id),e).catch(function(err){console.error(err);});}
+function removeEntry(id){deleteDoc(doc(db,'entries',id)).catch(function(err){console.error(err);});}
+function normEntry(x){
+  return {id:String(x.id||uid()),date:x.date,from:x.from,to:x.to,service:x.service||'',phone:x.phone||'',price:num(x.price),
+    materials:Array.isArray(x.materials)?x.materials.map(function(m){return {name:m.name||'',cost:num(m.cost)};}):[]};
+}
+function startSync(){
+  if(unsub)return;
+  unsub=onSnapshot(col,function(snap){
+    entries=snap.docs.map(function(d){var x=d.data();x.id=d.id;return x;});
+    if(view.name!=='form')render();
+    reschedule();
+  },function(err){console.error(err);});
+}
+
+/* ---------- уведомления (только в Android-приложении) ---------- */
+var rsBusy=false,rsAgain=false,chDone=false;
+function nid(s){var h=0;for(var i=0;i<s.length;i++){h=(h*31+s.charCodeAt(i))|0;}return Math.abs(h)%2000000000+1;}
+async function doResched(){
+  var perm=await LN.checkPermissions();
+  if(perm.display!=='granted'){perm=await LN.requestPermissions();}
+  if(perm.display!=='granted')return;
+  if(!chDone){
+    try{await LN.createChannel({id:'clients',name:'Напоминания о клиентах',importance:4,visibility:1,vibration:true});}catch(e){}
+    chDone=true;
+  }
+  var pend=await LN.getPending();
+  if(pend&&pend.notifications&&pend.notifications.length){
+    await LN.cancel({notifications:pend.notifications.map(function(n){return {id:n.id};})});
+  }
+  var nowMs=Date.now(),list=[];
+  entries.forEach(function(e){
+    var p=String(e.date).split('-').map(Number),t=String(e.from).split(':').map(Number);
+    var at=new Date(p[0],p[1]-1,p[2],t[0],t[1]).getTime()-REMIND_MIN*60000;
+    if(at>nowMs)list.push({at:at,e:e});
+  });
+  list.sort(function(a,b){return a.at-b.at;});
+  list=list.slice(0,150);
+  if(!list.length)return;
+  await LN.schedule({notifications:list.map(function(x){
+    return {id:nid(x.e.id),title:'Клиент через '+REMIND_MIN+' мин',
+      body:x.e.from+' – '+x.e.to+' · '+x.e.service+(x.e.phone?' · '+x.e.phone:''),
+      channelId:'clients',schedule:{at:new Date(x.at),allowWhileIdle:true}};
+  })});
+}
+function reschedule(){
+  if(!LN)return;
+  if(rsBusy){rsAgain=true;return;}
+  rsBusy=true;
+  doResched().catch(function(e){console.error(e);}).then(function(){
+    rsBusy=false;
+    if(rsAgain){rsAgain=false;reschedule();}
+  });
+}
+
+/* ---------- навигация ---------- */
+function go(v){view=v;history.pushState({v:v},'');render();}
+function back(){history.back();}
+window.addEventListener('popstate',function(e){
+  if(e.state&&e.state.v){view=e.state.v;}
+  else{var t=new Date();view={name:'cal',year:t.getFullYear(),month:t.getMonth(),date:null,id:null};}
+  render();
+});
+history.replaceState({v:view},'');
+
+function render(){
+  if(!ready){app.innerHTML='<p class="muted" style="text-align:center;margin-top:60px">Загрузка…</p>';return;}
+  if(!user){renderLogin();return;}
+  if(view.name!=='form')draft=null;
+  if(view.name==='cal')renderCal();
+  else if(view.name==='day')renderDay();
+  else if(view.name==='form')renderForm();
+  else renderStats();
+  window.scrollTo(0,0);
+}
+
+function renderLogin(){
+  app.innerHTML='<div class="login form"><div class="brand">LosAntos work</div><h1>Вход</h1>'+
+    '<label>Почта<input type="email" id="l_email" autocomplete="username"></label>'+
+    '<label>Пароль<input type="password" id="l_pass" autocomplete="current-password"></label>'+
+    '<p class="err" id="l_err"></p><button class="btn" data-act="login">Войти</button></div>';
+}
+
+function renderCal(){
+  var y=view.year,m=view.month;
+  var offset=(new Date(y,m,1).getDay()+6)%7;
+  var dim=new Date(y,m+1,0).getDate();
+  var prefix=y+'-'+pad(m+1)+'-';
+  var list=entries.filter(function(e){return e.date.indexOf(prefix)===0;});
+  var t=totals(list);
+  var counts={};
+  list.forEach(function(e){counts[e.date]=(counts[e.date]||0)+1;});
+  var td=todayStr();
+  var cells='';
+  for(var i=0;i<offset;i++)cells+='<div class="cell empty"></div>';
+  for(var d=1;d<=dim;d++){
+    var ds=ymd(y,m,d);
+    var c=counts[ds];
+    cells+='<button class="cell day'+(ds===td?' today':'')+(c?' has':'')+'" data-act="day" data-date="'+ds+'"><span>'+d+'</span>'+(c?'<i>'+c+'</i>':'')+'</button>';
+  }
+  app.innerHTML=
+    '<div class="brand">LosAntos work</div>'+
+    '<header><button class="nav" data-act="prev">‹</button><h1>'+MONTHS[m]+' '+y+'</h1><button class="nav" data-act="next">›</button></header>'+
+    sumBox(t,'Итого за месяц · записей: '+t.count)+
+    '<div class="dow">'+DOW.map(function(x){return '<div>'+x+'</div>';}).join('')+'</div>'+
+    '<div class="grid">'+cells+'</div>'+
+    '<div class="bar"><button class="btn sec" data-act="today">Сегодня</button><button class="btn" data-act="stats">Итоги и копия</button></div>';
+}
+
+function card(e){
+  var ms=matSum(e);
+  var mats=(e.materials||[]).filter(function(m){return m.name||num(m.cost);}).map(function(m){return esc(m.name||'Материал')+' — '+money(num(m.cost));}).join('<br>');
+  var tel=String(e.phone||'').replace(/[^\d+]/g,'');
+  return '<div class="card" data-act="edit" data-id="'+esc(e.id)+'">'+
+    '<div class="row"><b>'+esc(e.from)+' – '+esc(e.to)+'</b><b class="price">'+money(num(e.price))+'</b></div>'+
+    '<div class="svc">'+esc(e.service)+'</div>'+
+    (e.phone?'<div><a href="tel:'+tel+'">'+esc(e.phone)+'</a></div>':'')+
+    (mats?'<div class="muted small">Расходники:<br>'+mats+'</div>':'')+
+    '<div class="row muted small"><span>Расходы: '+money(ms)+'</span><span>Прибыль: '+money(num(e.price)-ms)+'</span></div></div>';
+}
+
+function renderDay(){
+  var list=entries.filter(function(e){return e.date===view.date;}).sort(function(a,b){return a.from.localeCompare(b.from);});
+  var t=totals(list);
+  app.innerHTML=
+    '<header><button class="nav" data-act="back">‹</button><h1 class="small">'+esc(dateTitle(view.date))+'</h1><span class="nav ph"></span></header>'+
+    (list.length?sumBox(t,'Итого за день · записей: '+t.count):'')+
+    '<div class="list">'+(list.length?list.map(card).join(''):'<p class="muted">Записей на этот день нет</p>')+'</div>'+
+    '<div class="bar"><button class="btn" data-act="add">+ Добавить запись</button></div>';
+}
+
+function startDraft(){
+  if(view.id){
+    var e=entries.find(function(x){return x.id===view.id;});
+    if(e){draft=JSON.parse(JSON.stringify(e));return;}
+  }
+  draft={id:null,date:view.date,from:'09:00',to:'10:00',service:'',phone:'',price:'',materials:[]};
+}
+
+function renderForm(){
+  if(!draft)startDraft();
+  var services=[];
+  entries.forEach(function(e){if(e.service&&services.indexOf(e.service)<0)services.push(e.service);});
+  var rows=draft.materials.map(function(m,i){
+    return '<div class="mrow"><input type="text" class="m_name" data-i="'+i+'" placeholder="Название" value="'+esc(m.name)+'"><input type="number" class="m_cost" data-i="'+i+'" inputmode="decimal" step="any" placeholder="₽" value="'+esc(m.cost)+'"><button class="x" data-act="delmat" data-i="'+i+'" type="button">✕</button></div>';
+  }).join('');
+  app.innerHTML=
+    '<header><button class="nav" data-act="back">‹</button><h1 class="small">'+(draft.id?'Запись':'Новая запись')+'</h1><span class="nav ph"></span></header>'+
+    '<div class="form"><div class="muted">'+esc(dateTitle(draft.date))+'</div>'+
+    '<div class="two"><label>С<input type="time" id="f_from" value="'+esc(draft.from)+'"></label><label>До<input type="time" id="f_to" value="'+esc(draft.to)+'"></label></div>'+
+    '<label>Услуга<input type="text" id="f_service" list="svc" value="'+esc(draft.service)+'" autocomplete="off"></label>'+
+    '<datalist id="svc">'+services.map(function(s){return '<option value="'+esc(s)+'">';}).join('')+'</datalist>'+
+    '<label>Телефон клиента<input type="tel" id="f_phone" value="'+esc(draft.phone)+'"></label>'+
+    '<label>Стоимость услуги, ₽<input type="number" id="f_price" inputmode="decimal" step="any" value="'+esc(draft.price)+'"></label>'+
+    '<div class="mats"><div class="mh">Расходные материалы</div>'+rows+'<button class="btn sec" data-act="addmat" type="button">+ Материал</button></div>'+
+    '<div class="calc" id="calc"></div>'+
+    '<div class="bar"><button class="btn" data-act="save">Сохранить</button>'+(draft.id?'<button class="btn del" data-act="del">Удалить</button>':'')+'</div></div>';
+  updateCalc();
+}
+
+function readForm(){
+  var g=function(id){return document.getElementById(id);};
+  if(!g('f_from')||!draft)return;
+  draft.from=g('f_from').value;
+  draft.to=g('f_to').value;
+  draft.service=g('f_service').value;
+  draft.phone=g('f_phone').value;
+  draft.price=g('f_price').value;
+  document.querySelectorAll('.m_name').forEach(function(el){draft.materials[+el.dataset.i].name=el.value;});
+  document.querySelectorAll('.m_cost').forEach(function(el){draft.materials[+el.dataset.i].cost=el.value;});
+}
+
+function updateCalc(){
+  var c=document.getElementById('calc');
+  if(!c||!draft)return;
+  var exp=matSum(draft),p=num(draft.price);
+  c.innerHTML='Расходы на материалы: <b>'+money(exp)+'</b><br>Чистая прибыль: <b class="ok">'+money(p-exp)+'</b>';
+}
+
+function saveDraft(){
+  readForm();
+  var e=JSON.parse(JSON.stringify(draft));
+  e.service=String(e.service).trim();
+  e.phone=String(e.phone).trim();
+  if(!e.from||!e.to){alert('Укажите время «С» и «До»');return;}
+  if(e.to<=e.from){alert('Время «До» должно быть позже времени «С»');return;}
+  if(!e.service){alert('Укажите услугу');return;}
+  e.price=num(e.price);
+  e.materials=e.materials.filter(function(m){return String(m.name).trim()||num(m.cost);}).map(function(m){return {name:String(m.name).trim(),cost:num(m.cost)};});
+  var clash=entries.some(function(o){return o.id!==e.id&&o.date===e.date&&o.from<e.to&&o.to>e.from;});
+  if(clash&&!confirm('Это время пересекается с другой записью. Сохранить всё равно?'))return;
+  if(e.id){entries=entries.map(function(o){return o.id===e.id?e:o;});}
+  else{e.id=uid();entries.push(e);}
+  persist(e);
+  reschedule();
+  draft=null;back();
+}
+
+function renderStats(){
+  var y=view.year;
+  var list=entries.filter(function(e){return e.date.indexOf(y+'-')===0;});
+  var t=totals(list);
+  var rows='';
+  for(var m=0;m<12;m++){
+    var mt=totals(entries.filter(function(e){return e.date.indexOf(y+'-'+pad(m+1)+'-')===0;}));
+    rows+='<tr data-act="month" data-m="'+m+'"><td>'+MONTHS[m]+' <span class="muted">('+mt.count+')</span></td><td>'+money(mt.rev)+'</td><td>'+money(mt.exp)+'</td><td><b>'+money(mt.profit)+'</b></td></tr>';
+  }
+  app.innerHTML=
+    '<header><button class="nav" data-act="back">‹</button><h1 class="small">Итоги</h1><span class="nav ph"></span></header>'+
+    '<header><button class="nav" data-act="yprev">‹</button><h1>'+y+' год</h1><button class="nav" data-act="ynext">›</button></header>'+
+    sumBox(t,'Итого за год · записей: '+t.count)+
+    '<table><tr><th>Месяц</th><th>Выручка</th><th>Расходы</th><th>Прибыль</th></tr>'+rows+'</table>'+
+    '<div class="tools"><button class="btn sec" data-act="export">Сохранить копию</button><button class="btn sec" data-act="import">Загрузить копию</button></div>'+
+    '<input type="file" id="imp" accept=".json,application/json" style="display:none">'+
+    '<div class="tools"><button class="btn sec" data-act="logout">Выйти из аккаунта</button></div>'+
+    '<p class="note">'+(LN?'Напоминание приходит за '+REMIND_MIN+' минут до клиента.':'Напоминания работают в Android-приложении.')+' Выручка — сумма стоимости услуг, прибыль = выручка минус расходные материалы. Нажми на месяц, чтобы открыть его календарь. Записи синхронизируются между телефонами.</p>';
+}
+
+function exportData(){
+  var blob=new Blob([JSON.stringify(entries,null,1)],{type:'application/json'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url;a.download='losantos-backup-'+todayStr()+'.json';
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(function(){URL.revokeObjectURL(url);},1500);
+}
+
+app.addEventListener('click',function(ev){
+  if(ev.target.closest('a'))return;
+  var el=ev.target.closest('[data-act]');
+  if(!el)return;
+  var act=el.dataset.act;
+  if(act==='login'){
+    var em=document.getElementById('l_email').value.trim(),pw=document.getElementById('l_pass').value;
+    var er=document.getElementById('l_err');
+    er.textContent='';
+    if(!em||!pw){er.textContent='Введите почту и пароль';return;}
+    signInWithEmailAndPassword(auth,em,pw).catch(function(){er.textContent='Не удалось войти: проверьте почту, пароль и интернет';});
+  }else if(act==='logout'){
+    if(confirm('Выйти из аккаунта?'))signOut(auth);
+  }else if(act==='prev'||act==='next'){
+    var m=view.month+(act==='next'?1:-1),y=view.year;
+    if(m<0){m=11;y--;}
+    if(m>11){m=0;y++;}
+    view={name:'cal',year:y,month:m,date:null,id:null};
+    history.replaceState({v:view},'');render();
+  }else if(act==='yprev'||act==='ynext'){
+    view={name:'stats',year:view.year+(act==='ynext'?1:-1),month:view.month,date:null,id:null};
+    history.replaceState({v:view},'');render();
+  }else if(act==='today'){
+    var t=new Date();
+    go({name:'day',year:t.getFullYear(),month:t.getMonth(),date:ymd(t.getFullYear(),t.getMonth(),t.getDate()),id:null});
+  }else if(act==='day'){
+    go({name:'day',year:view.year,month:view.month,date:el.dataset.date,id:null});
+  }else if(act==='stats'){
+    go({name:'stats',year:view.year,month:view.month,date:null,id:null});
+  }else if(act==='month'){
+    go({name:'cal',year:view.year,month:+el.dataset.m,date:null,id:null});
+  }else if(act==='add'){
+    draft=null;
+    go({name:'form',year:view.year,month:view.month,date:view.date,id:null});
+  }else if(act==='edit'){
+    draft=null;
+    go({name:'form',year:view.year,month:view.month,date:view.date,id:el.dataset.id});
+  }else if(act==='addmat'){
+    readForm();draft.materials.push({name:'',cost:''});renderForm();
+    var ins=document.querySelectorAll('.m_name');
+    if(ins.length)ins[ins.length-1].focus();
+  }else if(act==='delmat'){
+    readForm();draft.materials.splice(+el.dataset.i,1);renderForm();
+  }else if(act==='save'){
+    saveDraft();
+  }else if(act==='del'){
+    if(confirm('Удалить запись?')){
+      var did=draft.id;
+      entries=entries.filter(function(o){return o.id!==did;});
+      removeEntry(did);
+      reschedule();
+      draft=null;back();
+    }
+  }else if(act==='back'){
+    back();
+  }else if(act==='export'){
+    exportData();
+  }else if(act==='import'){
+    document.getElementById('imp').click();
+  }
+});
+
+app.addEventListener('input',function(){
+  if(view.name==='form'&&draft){readForm();updateCalc();}
+});
+
+app.addEventListener('change',function(ev){
+  if(ev.target.id!=='imp')return;
+  var f=ev.target.files[0];
+  if(!f)return;
+  var r=new FileReader();
+  r.onload=function(){
+    try{
+      var a=JSON.parse(r.result);
+      if(!Array.isArray(a)||a.some(function(x){return !x||!x.date||!x.from||!x.to;}))throw new Error('bad');
+      if(!confirm('Добавить записи из файла ('+a.length+') к текущим?'))return;
+      var items=a.map(normEntry);
+      for(var i=0;i<items.length;i+=400){
+        var b=writeBatch(db);
+        items.slice(i,i+400).forEach(function(x){b.set(doc(db,'entries',x.id),x);});
+        b.commit().catch(function(err){console.error(err);});
+      }
+      alert('Готово');
+    }catch(err){alert('Не удалось прочитать файл');}
+  };
+  r.readAsText(f);
+});
+
+onAuthStateChanged(auth,function(u){
+  user=u;
+  ready=true;
+  if(u){
+    startSync();
+  }else{
+    if(unsub){unsub();unsub=null;}
+    entries=[];
+    var t=new Date();
+    view={name:'cal',year:t.getFullYear(),month:t.getMonth(),date:null,id:null};
+  }
+  render();
+});
+
+render();
+if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(function(){});}
+</script>
+</body>
+</html>

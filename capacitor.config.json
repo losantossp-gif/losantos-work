@@ -1,0 +1,8 @@
+{
+  "appId": "com.losantos.work",
+  "appName": "LosAntos work",
+  "webDir": "docs",
+  "server": {
+    "androidScheme": "https"
+  }
+}
